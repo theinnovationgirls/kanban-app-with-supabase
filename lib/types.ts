@@ -7,6 +7,7 @@ export interface Task {
   status: TaskStatus
   position: number
   created_at: string
+  user_id: string
 }
 
 export const COLUMNS: { id: TaskStatus; title: string }[] = [
