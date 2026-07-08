@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
-import { Plus } from "lucide-react"
+import { LogOut, Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { COLUMNS, type Task, type TaskStatus } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -11,11 +12,27 @@ import { TaskDialog } from "@/components/task-dialog"
 
 export function KanbanBoard() {
   const supabase = useMemo(() => createClient(), [])
+  const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [defaultStatus, setDefaultStatus] = useState<TaskStatus>("pendiente")
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null)
+      setUserEmail(data.user?.email ?? null)
+    })
+  }, [supabase])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push("/auth/login")
+    router.refresh()
+  }
 
   const loadTasks = useCallback(async () => {
     const { data, error } = await supabase
@@ -70,10 +87,11 @@ export function KanbanBoard() {
       )
       await supabase.from("tasks").update({ title, description }).eq("id", editingTask.id)
     } else {
+      if (!userId) return
       const position = tasksByStatus[defaultStatus].length
       const { data } = await supabase
         .from("tasks")
-        .insert({ title, description, status: defaultStatus, position })
+        .insert({ title, description, status: defaultStatus, position, user_id: userId })
         .select()
         .single()
       if (data) setTasks((prev) => [...prev, data as Task])
@@ -139,10 +157,23 @@ export function KanbanBoard() {
             Arrastra las tarjetas para organizar tu flujo de trabajo.
           </p>
         </div>
-        <Button onClick={() => openCreate("pendiente")} className="gap-2 self-start sm:self-auto">
-          <Plus className="h-4 w-4" />
-          Nueva tarea
-        </Button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {userEmail ? (
+            <span className="hidden text-sm text-muted-foreground sm:inline">{userEmail}</span>
+          ) : null}
+          <Button onClick={() => openCreate("pendiente")} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nueva tarea
+          </Button>
+          <Button
+            onClick={handleSignOut}
+            variant="outline"
+            size="icon"
+            aria-label="Cerrar sesión"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </header>
 
       {loading ? (
