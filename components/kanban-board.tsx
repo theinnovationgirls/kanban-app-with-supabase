@@ -3,14 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
-import { LogOut, Plus } from "lucide-react"
+import { ArrowLeft, LogOut, Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { COLUMNS, type Task, type TaskStatus } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { BoardColumn } from "@/components/board-column"
 import { TaskDialog } from "@/components/task-dialog"
 
-export function KanbanBoard() {
+interface KanbanBoardProps {
+  teamId: string
+  teamName: string
+  /** Si está presente, se muestra un botón "volver" (uso: panel de admin) */
+  onBack?: () => void
+}
+
+export function KanbanBoard({ teamId, teamName, onBack }: KanbanBoardProps) {
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -38,23 +45,29 @@ export function KanbanBoard() {
     const { data, error } = await supabase
       .from("tasks")
       .select("*")
+      .eq("team_id", teamId)
       .order("position", { ascending: true })
     if (!error && data) setTasks(data as Task[])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, teamId])
 
   useEffect(() => {
+    setLoading(true)
     loadTasks()
     const channel = supabase
-      .channel("tasks-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
-        loadTasks()
-      })
+      .channel(`tasks-changes-${teamId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: `team_id=eq.${teamId}` },
+        () => {
+          loadTasks()
+        },
+      )
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase, loadTasks])
+  }, [supabase, loadTasks, teamId])
 
   const tasksByStatus = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
@@ -91,7 +104,14 @@ export function KanbanBoard() {
       const position = tasksByStatus[defaultStatus].length
       const { data } = await supabase
         .from("tasks")
-        .insert({ title, description, status: defaultStatus, position, user_id: userId })
+        .insert({
+          title,
+          description,
+          status: defaultStatus,
+          position,
+          user_id: userId,
+          team_id: teamId,
+        })
         .select()
         .single()
       if (data) setTasks((prev) => [...prev, data as Task])
@@ -150,8 +170,17 @@ export function KanbanBoard() {
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-8 md:px-6">
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          {onBack ? (
+            <button
+              onClick={onBack}
+              className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Volver al panel
+            </button>
+          ) : null}
           <h1 className="text-balance text-2xl font-bold tracking-tight text-foreground">
-            Tablero Kanban
+            {teamName}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Arrastra las tarjetas para organizar tu flujo de trabajo.
@@ -165,14 +194,16 @@ export function KanbanBoard() {
             <Plus className="h-4 w-4" />
             Nueva tarea
           </Button>
-          <Button
-            onClick={handleSignOut}
-            variant="outline"
-            size="icon"
-            aria-label="Cerrar sesión"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          {!onBack ? (
+            <Button
+              onClick={handleSignOut}
+              variant="outline"
+              size="icon"
+              aria-label="Cerrar sesión"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
       </header>
 

@@ -1,9 +1,9 @@
-import { KanbanBoard } from "@/components/kanban-board"
+import { TeamGate } from "@/components/team-gate"
 
 export default function Page() {
   return (
     <main className="min-h-screen bg-background">
-      <KanbanBoard />
+      <TeamGate />
     </main>
   )
 }

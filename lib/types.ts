@@ -8,6 +8,23 @@ export interface Task {
   position: number
   created_at: string
   user_id: string
+  team_id: string
+}
+
+export interface Profile {
+  id: string
+  full_name: string | null
+  avatar_url: string | null
+  is_admin: boolean
+  created_at: string
+}
+
+export interface Team {
+  id: string
+  name: string
+  invite_code: string
+  created_by: string | null
+  created_at: string
 }
 
 export const COLUMNS: { id: TaskStatus; title: string }[] = [
